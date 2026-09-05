@@ -317,7 +317,11 @@ class YM_ReadingMateMetadataProvider(BaseMetadataProvider):
         "enabled": True,
         "provider": "github-raw",
         "raw_base_url": "https://raw.githubusercontent.com/leeyj/BookOasis_stable/main/sample_plugins/metadata/reading_doumi",
-        "files": ["reading_doumi.py", "__init__.py", "VERSION"],
+        "files": [
+            "reading_doumi.py", "__init__.py", "VERSION",
+            "index.html", "style.css", "script.js",
+            "README.md", "requirements.txt",
+        ],
         "version_file": "VERSION",
         "version_key": "plugin version",
         "show_sample_update_button": True,
