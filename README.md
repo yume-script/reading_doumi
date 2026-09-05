@@ -1,4 +1,4 @@
-# 독서메이트 (reading_doumi)
+# 독서도우미 (reading_doumi)
 
 BookOasis의 오버레이 마스코트 플러그인. 우측 하단에 떠 있는 캐릭터를 클릭하면
 채팅창이 열리고, LLM과 대화하며 서재의 책을 추천받거나 목록/저자/줄거리를
@@ -6,7 +6,7 @@ BookOasis의 오버레이 마스코트 플러그인. 우측 하단에 떠 있는
 지원한다.
 
 - 플러그인 id: `reading_doumi` (이전 id: `reading_mate`)
-- 클래스: `YM_ReadingMateMetadataProvider`
+- 클래스: `YM_ReadingDoumiMetadataProvider`
 - 카테고리 탭: `general`/`adult`/`audiobook`/`video` 4개 세션 전체에 노출
 
 ## 설치
@@ -16,9 +16,9 @@ BookOasis의 오버레이 마스코트 플러그인. 우측 하단에 떠 있는
    `script.js`, `README.md`, `requirements.txt`).
 2. `pip install -r requirements.txt` (또는 컨테이너에 `beautifulsoup4`가
    이미 설치돼 있는지 확인).
-3. BookOasis 재시작 후 좌측 사이드바에서 "독서메이트" 탭을 한 번 연다
+3. BookOasis 재시작 후 좌측 사이드바에서 "독서도우미" 탭을 한 번 연다
    (탭을 열어야 마스코트가 화면에 뜬다 - 새로고침하면 다시 한 번 열어야 함).
-4. 환경설정 > 플러그인 > 독서메이트에서 `LLM_API_KEY` 등을 설정한다.
+4. 환경설정 > 플러그인 > 독서도우미에서 `LLM_API_KEY` 등을 설정한다.
 
 ## 환경설정 항목
 

@@ -240,11 +240,11 @@ YM_DEFAULT_SYSTEM_PROMPT = (
 )
 
 
-class YM_ReadingMateMetadataProvider(BaseMetadataProvider):
+class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
     """우측 하단 오버레이 캐릭터 + LLM 채팅 기반 도서 추천/검색 플러그인."""
 
     id = "reading_doumi"
-    name = "독서메이트 (오버레이 마스코트)"
+    name = "독서도우미 (오버레이 마스코트)"
     is_searchable = False
 
     config_schema = [
@@ -305,7 +305,7 @@ class YM_ReadingMateMetadataProvider(BaseMetadataProvider):
     ]
 
     category_tab = {
-        "title": "독서메이트",
+        "title": "독서도우미",
         "icon": "fa-solid fa-comment-dots",
         "order": 95,
         # 'all'이면 general/adult/audiobook/video 4개 세션(카테고리 탭) 전체에
@@ -334,7 +334,7 @@ class YM_ReadingMateMetadataProvider(BaseMetadataProvider):
         return []
 
     def apply(self, db_type, book_id, item_data):
-        return False, "독서메이트 플러그인은 도서 메타데이터 적용을 지원하지 않습니다."
+        return False, "독서도우미 플러그인은 도서 메타데이터 적용을 지원하지 않습니다."
 
     # ------------------------------------------------------------------
     # 요청 파라미터 파싱

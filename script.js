@@ -236,7 +236,7 @@
     host.innerHTML = `
       <div class="ym_rm-chat-panel" id="ym_rm-chat-panel">
         <div class="ym_rm-chat-header">
-          <span id="ym_rm-chat-title">독서메이트</span>
+          <span id="ym_rm-chat-title">독서도우미</span>
           <div class="ym_rm-chat-header-actions">
             <button type="button" class="ym_rm-chat-tts" id="ym_rm-chat-tts" title="답변 음성으로 읽어주기 켜기/끄기">
               <i class="fa-solid fa-volume-xmark"></i>
@@ -250,10 +250,10 @@
           <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
         </form>
       </div>
-      <button type="button" class="ym_rm-avatar-btn" id="ym_rm-avatar-btn" title="독서메이트에게 물어보기">
+      <button type="button" class="ym_rm-avatar-btn" id="ym_rm-avatar-btn" title="독서도우미에게 물어보기">
         <span id="ym_rm-avatar-fallback">📚</span>
       </button>
-      <canvas class="ym_rm-live2d-canvas" id="ym_rm-live2d-canvas" title="독서메이트에게 물어보기"></canvas>
+      <canvas class="ym_rm-live2d-canvas" id="ym_rm-live2d-canvas" title="독서도우미에게 물어보기"></canvas>
     `;
     document.body.appendChild(host);
 
@@ -349,7 +349,7 @@
     fallback.dataset.applied = '1';
     const img = document.createElement('img');
     img.src = url;
-    img.alt = ymCharacterName || '독서메이트';
+    img.alt = ymCharacterName || '독서도우미';
     fallback.replaceWith(img);
   }
 
