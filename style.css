@@ -1,0 +1,63 @@
+.ym_rm-wrap {
+  padding: 1.5rem;
+  max-width: 100%;
+}
+
+.ym_rm-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ym_rm-header i {
+  font-size: 1.5rem;
+  color: var(--app-accent, #7c5cff);
+  margin-top: 0.2rem;
+}
+
+.ym_rm-header h2 {
+  margin: 0 0 0.25rem;
+}
+
+.ym_rm-header p {
+  margin: 0;
+  color: var(--app-text-secondary, #999);
+  font-size: 0.9rem;
+}
+
+.ym_rm-note {
+  background: var(--app-bg-card, #1e1e2e);
+  border: 1px solid var(--app-border, #333);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.ym_rm-note p {
+  margin: 0 0 0.5rem;
+}
+
+.ym_rm-note p:last-child {
+  margin-bottom: 0;
+}
+
+.ym_rm-status {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--app-text-secondary, #999);
+}
+
+/*
+ * 마스코트 오버레이(#ym_reading-mate-mascot)의 CSS는 여기 두지 않는다.
+ * 이 style.css는 category_tab 컨테이너 안에 <style id="plugin-custom-style-...">
+ * 로 주입되는데, 다른 사이드바 탭으로 이동하면 코어가 그 컨테이너의 innerHTML을
+ * 통째로 갈아치우면서 이 <style> 태그도 함께 사라진다. 반면 마스코트 자신은
+ * document.body에 옮겨 붙어 탭을 넘어가도 살아남아야 하므로, 마스코트 전용
+ * CSS는 script.js에서 document.head에 직접 <style>을 주입해 독립적으로
+ * 살려둔다 (script.js의 ym_ensureMascotStyle() 참고).
+ *
+ * 여기 아래 클래스/아이디들은 전부 ym_ 접두사를 붙여, document.body/head로
+ * 튀어나가거나 다른 플러그인과 마주칠 수 있는 이름들이 서로 겹치지 않게 했다.
+ */
