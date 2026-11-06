@@ -1,0 +1,46 @@
+/* 독서도우미 홈 위젯 - Shadow DOM 안에서만 적용된다. 색은 코어 테마 변수(--app-*)를 따른다. */
+:host { display: block; }
+.ym_rdw {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: var(--app-bg-card, #1e1e2e);
+  color: var(--app-text-primary, #eee);
+  font-family: inherit;
+}
+.ym_rdw-avatar {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--app-accent, #7c5cff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  background: var(--app-bg-sidebar, #181825);
+}
+.ym_rdw-body { min-width: 0; flex: 1; }
+.ym_rdw-name { margin: 0 0 0.2rem; font-weight: 700; font-size: 1rem; }
+.ym_rdw-desc {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--app-text-secondary, #aab);
+}
+.ym_rdw-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.ym_rdw-open {
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  background: var(--app-accent, #7c5cff);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.ym_rdw-open:hover { filter: brightness(1.1); }
+.ym_rdw-open:focus-visible { outline: 2px solid var(--app-text-primary, #eee); outline-offset: 2px; }
+.ym_rdw-status { font-size: 0.75rem; color: var(--app-text-secondary, #aab); }

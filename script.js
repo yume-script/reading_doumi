@@ -1,6 +1,6 @@
 (function () {
   // 이 파일은 core가 `new Function('pluginId', 'container', bundle.js)`로 감싸서
-  // 실행한다 - 즉 'pluginId'와 'container'는 이미 파라미터로 주어진 전역 스코프
+  // 실행한다 (홈 위젯의 dashboard.js도 같은 방식으로 실행하되 container는 null) - 즉 'pluginId'와 'container'는 이미 파라미터로 주어진 전역 스코프
   // 변수이며, 아래 IIFE는 그 값을 그대로 클로저로 캡처해서 쓴다.
   //
   // 이 IIFE 안의 지역 변수/함수 자체는 플러그인마다 독립된 함수 스코프라 원래도
@@ -20,6 +20,8 @@
   let ymHistory = [];
   let ymCharacterName = null;
   let ymTtsEnabled = false;
+  // 인사말(=캐릭터 설정·이전 대화 복원) 요청은 마스코트당 한 번만 보낸다.
+  let ymGreeted = false;
 
   // Live2D는 필요할 때만(LIVE2D_MODEL_URL이 실제로 설정됐을 때만) CDN에서
   // 지연 로딩한다 - pixi.js + pixi-live2d-display가 꽤 무겁기 때문.
@@ -325,9 +327,17 @@
 
     const ym_toggleChat = () => {
       panel.classList.toggle('ym_open');
-      if (panel.classList.contains('ym_open') && ymHistory.length === 0) {
-        ym_fetchReply(''); // 첫 오픈 시 인사말 요청
+      if (panel.classList.contains('ym_open') && !ymGreeted) {
+        ym_greet(); // 첫 오픈 시 인사말 요청
       }
+    };
+
+    // 홈 위젯 카드(dashboard.js)의 "대화 열기" 버튼이 부르는 전역 진입점 -
+    // 마스코트는 한 페이지에 하나뿐이라 window에 하나만 걸어둔다.
+    window.ymReadingDoumiOpen = () => {
+      if (!panel.classList.contains('ym_open')) ym_toggleChat();
+      input.focus();
+      ym_3dPlay('tap');
     };
 
     avatarBtn.addEventListener('click', ym_toggleChat);
@@ -514,8 +524,8 @@
           const panel = document.getElementById('ym_rm-chat-panel');
           if (panel) {
             panel.classList.toggle('ym_open');
-            if (panel.classList.contains('ym_open') && ymHistory.length === 0) {
-              ym_fetchReply('');
+            if (panel.classList.contains('ym_open') && !ymGreeted) {
+              ym_greet();
             }
           }
           // 모델에 모션이 있으면 탭할 때마다 살짝 반응하게 - 모델마다 모션
@@ -839,6 +849,12 @@
       });
   }
 
+  function ym_greet() {
+    if (ymGreeted) return;
+    ymGreeted = true;
+    ym_fetchReply('');
+  }
+
   function ym_sendMessage(text) {
     ym_appendBubble('user', text);
     ym_fetchReply(text);
@@ -848,6 +864,8 @@
   // 3) 카테고리 탭(설정/안내 페이지) 쪽 상태 표시 - container 안쪽만 건드린다.
   // ------------------------------------------------------------------
   function ym_renderTabStatus() {
+    // 홈 위젯(dashboard.js)이 이 파일을 실행할 때는 탭 컨테이너가 없다.
+    if (!container) return;
     const status = container.querySelector('#ym_rm-status');
     if (!status) return;
     const host = document.getElementById('ym_reading-mate-mascot');
@@ -856,6 +874,11 @@
       : '마스코트를 준비하는 중...';
   }
 
+  const ymIsNewMascot = !document.getElementById('ym_reading-mate-mascot');
   ym_ensureMascot();
+  // 새로 띄운 마스코트라면 캐릭터 설정(이미지/Live2D/3D 모형)과 인사말을 바로
+  // 받아둔다 - 홈 위젯으로 띄운 경우 채팅을 열기 전부터 3D 모형 등이 보이게.
+  // (LLM 호출 없는 가벼운 요청이다.)
+  if (ymIsNewMascot) ym_greet();
   ym_renderTabStatus();
 })();
