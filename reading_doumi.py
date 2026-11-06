@@ -55,6 +55,13 @@ LLM과 대화하듯 내 서재의 책을 추천받거나, 책 목록/저자/서�
   올려야 하며(핫링크 불가), 여기엔 그 호스팅 URL만 넣으면 된다. 비워두면
   기존 CHARACTER_IMAGE_URL/이모지 방식 그대로 동작한다.
 
+- (신규) CHARACTER_3D_MODEL 설정으로 BookOasis Assistant의 3D 서재(lib3d)에서
+  쓰는 것과 같은 glTF 3D 모형(three.js 예제 모형: RobotExpressive 로봇, Xbot,
+  Michelle, readyplayer.me)을 마스코트로 띄울 수 있다. robot/xbot/michelle/
+  readyplayer 중 하나를 쓰거나 직접 호스팅한 .glb/.gltf URL을 넣으면 된다.
+  설정하면 LIVE2D_MODEL_URL/CHARACTER_IMAGE_URL보다 우선 적용되고, 답변
+  감정(celebrate/sorry)에 맞춰 엄지척·춤·고개 젓기 같은 동작을 한다.
+
 - (신규) 책과는 무관하지만 마스코트 잡담용으로 /날씨 <지역>과 /주식 <종목명
   또는 코드>를 추가했다. 둘 다 DB 접근 없이 외부 사이트만 조회하는
   "/명령어" 방식이고, 별도 API 키가 필요 없다(둘 다 네이버의 공개 페이지/
@@ -218,6 +225,13 @@ YM_EMOTION_SORRY_WORDS = [
 ]
 
 # ------------------------------------------------------------------
+# 3D 모형 프리셋 - BookOasis Assistant 3D 서재(web/lib3d/app.js)가 쓰는 것과
+# 같은 three.js 예제 glTF 모형들. 실제 URL/동작 매핑은 script.js에 있고,
+# 여기서는 설정값 검증용 이름 목록만 둔다.
+# ------------------------------------------------------------------
+YM_MODEL3D_PRESETS = ("robot", "xbot", "michelle", "readyplayer")
+
+# ------------------------------------------------------------------
 # 다른 BookOasis 플러그인과의 연동 설정 (전부 "추정" - 위 모듈 docstring 참고)
 # ------------------------------------------------------------------
 YM_SIBLING_PLUGIN_MODULES = {
@@ -288,6 +302,17 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
                 "수는 없고(라이선스 동의 후 다운로드해야 함, 일반 이용자/연매출 1천만엔 미만 소규모 "
                 "사업자 한정 무료), 반드시 별도 웹서버에 업로드해서 그 URL을 써야 해요. 비워두면 위 "
                 "이미지/이모지로 대체돼요."
+            ),
+            "type": "text",
+            "required": False,
+        },
+        {
+            "key": "CHARACTER_3D_MODEL",
+            "label": (
+                "3D 모형 (선택) - BookOasis Assistant 3D 서재에서 쓰는 모형을 마스코트로 띄워요. "
+                "robot(로봇, 기본 추천) / xbot(마네킹) / michelle(옷 입은 사람) / readyplayer(정장 남자) "
+                "중 하나를 쓰거나, 직접 호스팅한 .glb/.gltf URL을 넣으세요. 설정하면 Live2D/이미지보다 "
+                "우선 적용되고, 비워두면 기존 방식 그대로예요."
             ),
             "type": "text",
             "required": False,
@@ -883,15 +908,29 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
             return "celebrate"
         return "normal"
 
-    def _reply_payload(self, character_name, character_image_url, character_live2d_url, reply):
+    def _reply_payload(self, character_name, character_image_url, character_live2d_url, reply,
+                       character_model3d=""):
         return {
             "success": True,
             "reply": reply,
             "character_name": character_name,
             "character_image_url": character_image_url,
             "character_live2d_url": character_live2d_url,
+            "character_model3d": character_model3d,
             "emotion": self._detect_emotion(reply),
         }
+
+    def _normalize_model3d(self, raw):
+        """CHARACTER_3D_MODEL 값을 프리셋 이름(소문자) 또는 http(s) URL로 정리한다.
+        알 수 없는 값이면 빈 문자열(=3D 사용 안 함)을 돌려준다."""
+        value = str(raw or "").strip()
+        if not value:
+            return ""
+        if value.lower() in YM_MODEL3D_PRESETS:
+            return value.lower()
+        if re.match(r"^https?://", value, re.I):
+            return value
+        return ""
 
     def _get_status_map(self, cfg):
         raw = cfg.get("_BOOK_STATUS")
@@ -1147,6 +1186,7 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
         character_name = str(cfg.get("CHARACTER_NAME") or "책비서").strip()
         character_image_url = str(cfg.get("CHARACTER_IMAGE_URL") or "").strip()
         character_live2d_url = str(cfg.get("LIVE2D_MODEL_URL") or "").strip()
+        character_model3d = self._normalize_model3d(cfg.get("CHARACTER_3D_MODEL"))
 
         if not api_key:
             return {
@@ -1155,7 +1195,9 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
             }
 
         def reply_payload(reply_text):
-            return self._reply_payload(character_name, character_image_url, character_live2d_url, reply_text)
+            return self._reply_payload(
+                character_name, character_image_url, character_live2d_url, reply_text, character_model3d
+            )
 
         args = self._get_request_args()
         stored_history = cfg.get("_CHAT_HISTORY")
@@ -1169,6 +1211,7 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
                     "character_name": character_name,
                     "character_image_url": character_image_url,
                     "character_live2d_url": character_live2d_url,
+                    "character_model3d": character_model3d,
                 }
             return reply_payload(
                 f"안녕! 나는 {character_name}야. 책 추천은 물론, 서재에 있는 책 목록·저자·줄거리도 찾아줄 수 있어.\n"

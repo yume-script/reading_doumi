@@ -30,6 +30,7 @@ BookOasis의 오버레이 마스코트 플러그인. 우측 하단에 떠 있는
 | `CHARACTER_NAME` | - | 캐릭터 이름 (기본: `책비서`) |
 | `CHARACTER_IMAGE_URL` | - | 캐릭터 이미지 URL (비워두면 기본 이모지 📚) |
 | `LIVE2D_MODEL_URL` | - | Live2D 모델(.model3.json) 직접 호스팅 URL. 설정하면 `CHARACTER_IMAGE_URL`보다 우선 적용됨. live2d.com 샘플은 라이선스 동의 후 다운로드해서 직접 호스팅해야 함(핫링크 불가) |
+| `CHARACTER_3D_MODEL` | - | 3D 모형 마스코트. BookOasis Assistant 3D 서재와 같은 three.js 예제 glTF 모형을 쓴다: `robot`(RobotExpressive, 표정·손 흔들기·춤) / `xbot`(마네킹) / `michelle`(옷 입은 사람, 춤) / `readyplayer`(정장 남자), 또는 직접 호스팅한 `.glb`/`.gltf` URL. 설정하면 `LIVE2D_MODEL_URL`·`CHARACTER_IMAGE_URL`보다 우선하고, 로딩에 실패하면 Live2D → 이미지/이모지 순으로 물러난다 |
 | `SYSTEM_PROMPT` | - | AI 페르소나 프롬프트. `{character_name}` 자리는 자동 치환. 비워두면 코드 내장 기본값 사용 |
 
 ## 채팅 명령어
@@ -72,7 +73,13 @@ BookOasis의 오버레이 마스코트 플러그인. 우측 하단에 떠 있는
 - **캐릭터 감정 표현**: 답변 문구에 "축하/완독" 등이 있으면 잠깐 🎉로,
   "못 찾음/오류/미안" 등이 있으면 잠깐 😥로 아바타가 바뀌었다가 원래
   모습으로 돌아온다. 별도 설정 없이 항상 동작하며, Live2D가 활성화된
-  경우에는 건너뛴다.
+  경우에는 건너뛴다. 3D 모형(`CHARACTER_3D_MODEL`)이 떠 있으면 이모지 대신
+  모형이 동작으로 반응한다(축하 → 엄지척/점프/춤, 미안 → 고개 젓기 + 슬픈 표정,
+  클릭 → 손 흔들기/끄덕임).
+- **3D 모형**: three.js r128과 모형 파일을 CDN(cdnjs, jsDelivr)에서 지연 로딩한다.
+  `michelle`/`readyplayer`는 자체 동작이 없어서 Xbot의 서 있기·끄덕임·고개 젓기
+  동작을 뼈 이름(Mixamo) 기준으로 옮겨 입힌다(3D 서재와 같은 방식). 직접 넣은
+  `.glb`는 애니메이션 이름(idle/wave/dance/no 등)으로 동작을 짐작해서 쓴다.
 - **채팅 기록 영구 저장**: 최근 40개 메시지까지 플러그인 설정 저장소에
   저장돼서, 새로고침 후 마스코트를 다시 열어도 이전 대화가 복원된다.
 - **다른 플러그인 연동**: `unified_book`, `cover_quiz`를 같은 모듈 경로

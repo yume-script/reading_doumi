@@ -34,6 +34,44 @@
   let ymLive2DLoadPromise = null;
   let ymLive2DApp = null;
 
+  // 3D 모형(CHARACTER_3D_MODEL)도 설정됐을 때만 three.js를 지연 로딩한다.
+  // BookOasis Assistant의 3D 서재(web/lib3d)와 같은 three.js r128 + 같은 예제
+  // 모형(RobotExpressive/Xbot/Michelle/readyplayer.me)을 그대로 쓴다.
+  const YM_THREE_LIBS = [
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', has: () => !!window.THREE },
+    { src: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js', has: () => !!(window.THREE && window.THREE.GLTFLoader) },
+    { src: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js', has: () => !!(window.THREE && window.THREE.SkeletonUtils) },
+  ];
+  const YM_3D_MODEL_BASE = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r175/examples/models/gltf/';
+  // 프리셋별 모형 파일과 동작 이름. borrow가 있으면 그 모형(Xbot)의 서 있기/
+  // 끄덕임/고개 젓기 동작을 뼈 이름(Mixamo)으로 옮겨 입힌다 - lib3d와 같은 방식.
+  const YM_3D_PRESETS = {
+    robot: {   // RobotExpressive (Tomás Laulhé/Quaternius, CC0) - 표정(morph)까지 있음
+      url: YM_3D_MODEL_BASE + 'RobotExpressive/RobotExpressive.glb',
+      idle: 'Idle', greet: ['Wave'], tap: ['Wave', 'Yes'],
+      celebrate: ['ThumbsUp', 'Jump', 'Dance'], sorry: ['No'],
+    },
+    xbot: {
+      url: YM_3D_MODEL_BASE + 'Xbot.glb',
+      idle: 'idle', greet: ['agree'], tap: ['agree'],
+      celebrate: ['agree'], sorry: ['headShake'], additive: ['agree', 'headShake'],
+    },
+    michelle: {
+      url: YM_3D_MODEL_BASE + 'Michelle.glb', borrow: YM_3D_MODEL_BASE + 'Xbot.glb',
+      idle: 'idle', greet: ['agree'], tap: ['agree'],
+      celebrate: ['SambaDance', 'agree'], sorry: ['headShake'], additive: ['agree', 'headShake'],
+    },
+    readyplayer: {
+      url: YM_3D_MODEL_BASE + 'readyplayer.me.glb', borrow: YM_3D_MODEL_BASE + 'Xbot.glb',
+      idle: 'idle', greet: ['agree'], tap: ['agree'],
+      celebrate: ['agree'], sorry: ['headShake'], additive: ['agree', 'headShake'],
+    },
+  };
+  const YM_3D_W = 140;
+  const YM_3D_H = 200;
+  let ymThreeLoadPromise = null;
+  let ym3D = null;   // { scene, camera, renderer, mixer, actions, preset, face, mood, emote }
+
   // ------------------------------------------------------------------
   // 1) 마스코트 전용 CSS를 document.head에 직접 주입한다.
   //    이유: style.css는 카테고리 탭 컨테이너 안에서만 살아있고, 다른 탭으로
@@ -89,6 +127,14 @@
         display: none;
         width: 140px;
         height: 200px;
+        cursor: pointer;
+        background: transparent;
+        filter: drop-shadow(0 6px 14px rgba(0,0,0,0.35));
+      }
+      #ym_reading-mate-mascot .ym_rm-3d-canvas {
+        display: none;
+        width: ${YM_3D_W}px;
+        height: ${YM_3D_H}px;
         cursor: pointer;
         background: transparent;
         filter: drop-shadow(0 6px 14px rgba(0,0,0,0.35));
@@ -254,6 +300,7 @@
         <span id="ym_rm-avatar-fallback">📚</span>
       </button>
       <canvas class="ym_rm-live2d-canvas" id="ym_rm-live2d-canvas" title="독서도우미에게 물어보기"></canvas>
+      <canvas class="ym_rm-3d-canvas" id="ym_rm-3d-canvas" title="독서도우미에게 물어보기"></canvas>
     `;
     document.body.appendChild(host);
 
@@ -288,6 +335,10 @@
     // 클릭했을 때를 대비해 캔버스 자체에도 같은 토글을 걸어둔다. 모델의
     // pointertap 쪽은 ym_setupLive2D()에서 별도로 건다.
     live2dCanvas.addEventListener('click', ym_toggleChat);
+    host.querySelector('#ym_rm-3d-canvas').addEventListener('click', () => {
+      ym_toggleChat();
+      ym_3dPlay('tap');
+    });
     closeBtn.addEventListener('click', () => panel.classList.remove('ym_open'));
 
     form.addEventListener('submit', (e) => {
@@ -366,6 +417,9 @@
   function ym_flashEmotion(emotion) {
     const emoji = YM_EMOTION_EMOJI[emotion];
     if (!emoji) return; // 'normal'이거나 알 수 없는 값이면 그대로 둔다
+
+    // 3D 모형이 떠 있으면 이모지 대신 모형이 동작(엄지척/춤/고개 젓기)으로 반응한다.
+    if (ym3D) { ym_3dPlay(emotion); return; }
 
     const avatarBtn = document.getElementById('ym_rm-avatar-btn');
     const live2dCanvas = document.getElementById('ym_rm-live2d-canvas');
@@ -479,6 +533,247 @@
       });
   }
 
+  // ------------------------------------------------------------------
+  // 3D 모형 마스코트 - CHARACTER_3D_MODEL이 설정된 경우에만 호출된다.
+  // three.js r128 + GLTFLoader + SkeletonUtils를 CDN에서 순서대로 로드하고,
+  // 캔버스에 glTF 모형을 띄워 서 있기(idle) 동작을 반복한다. 클릭하면 손을
+  // 흔들고, 답변 감정(celebrate/sorry)에 맞춰 한 번짜리 동작을 한다.
+  // 무엇이든 실패하면 onFail()(Live2D 폴백)을 부르고 기존 아바타를 그대로 둔다.
+  // ------------------------------------------------------------------
+  function ym_ensureThreeLibs() {
+    if (!ymThreeLoadPromise) {
+      ymThreeLoadPromise = YM_THREE_LIBS.reduce(
+        (p, lib) => p.then(() => (lib.has() ? null : ym_loadScriptOnce(lib.src))),
+        Promise.resolve()
+      );
+    }
+    return ymThreeLoadPromise;
+  }
+
+  function ym_loadGltf(url) {
+    return new Promise((resolve, reject) => {
+      new window.THREE.GLTFLoader().load(url, resolve, undefined, reject);
+    });
+  }
+
+  // 뼈 이름에서 Mixamo 접두사를 빼면 Xbot/Michelle/readyplayer.me가 같은 이름을 쓴다.
+  function ym_boneKey(n) { return n.replace(/^mixamorig:?/, ''); }
+  function ym_boneMap(root) {
+    const o = {};
+    root.updateMatrixWorld(true);
+    root.traverse((b) => { if (b.isBone) o[ym_boneKey(b.name)] = b; });
+    return o;
+  }
+  function ym_worldQ(o) { const q = new window.THREE.Quaternion(); o.getWorldQuaternion(q); return q; }
+  function ym_worldP(o) { const v = new window.THREE.Vector3(); o.getWorldPosition(v); return v; }
+  // 대상 모형의 기본 자세(A자)를 원본(T자)에 맞춘다 - lib3d의 alignRest와 같다.
+  function ym_alignRest(S, root) {
+    const T = window.THREE, order = [];
+    root.traverse((b) => { if (b.isBone) order.push(b); });
+    order.forEach((db) => {
+      const sb = S[ym_boneKey(db.name)];
+      if (!sb) return;
+      let dc = null, sc = null;
+      db.children.forEach((c) => {
+        if (!dc && c.isBone && S[ym_boneKey(c.name)]) { dc = c; sc = S[ym_boneKey(c.name)]; }
+      });
+      if (!dc) return;
+      root.updateMatrixWorld(true);
+      const sd = ym_worldP(sc).sub(ym_worldP(sb)), dd = ym_worldP(dc).sub(ym_worldP(db));
+      if (sd.lengthSq() < 1e-10 || dd.lengthSq() < 1e-10) return;
+      const w = new T.Quaternion().setFromUnitVectors(dd.normalize(), sd.normalize()).multiply(ym_worldQ(db));
+      db.quaternion.copy(ym_worldQ(db.parent).invert().multiply(w));
+    });
+    root.updateMatrixWorld(true);
+  }
+  // 원본 모형의 동작을 대상 모형 뼈대로 옮긴다 (회전 트랙만, 제자리 동작) - lib3d의 retargetClip과 같다.
+  function ym_retargetClip(srcRoot, dstRoot0, clip) {
+    const T = window.THREE;
+    const dstRoot = T.SkeletonUtils.clone(dstRoot0);
+    const S = ym_boneMap(srcRoot), D = ym_boneMap(dstRoot), tracks = [];
+    ym_alignRest(S, dstRoot);
+    clip.tracks.forEach((tr) => {
+      const mm = /^(.*)\.quaternion$/.exec(tr.name);
+      if (!mm) return;
+      const key = ym_boneKey(mm[1]), sb = S[key], db = D[key];
+      if (!sb || !db) return;
+      const P = ym_worldQ(db.parent).invert().multiply(ym_worldQ(sb.parent));
+      const Q = ym_worldQ(sb).invert().multiply(ym_worldQ(db));
+      const v = tr.values.slice(), q = new T.Quaternion();
+      for (let i = 0; i < v.length; i += 4) { q.fromArray(v, i); q.premultiply(P).multiply(Q); q.toArray(v, i); }
+      tracks.push(new T.QuaternionKeyframeTrack(db.name + '.quaternion', tr.times, v));
+    });
+    return new T.AnimationClip(clip.name, clip.duration, tracks);
+  }
+
+  // 직접 넣은 .glb URL은 동작 이름을 모르니 흔한 이름으로 짐작한다.
+  function ym_guessPreset(url, clips) {
+    const names = Object.keys(clips);
+    const find = (re) => names.filter((n) => re.test(n));
+    return {
+      url: url,
+      idle: find(/idle|stand/i)[0] || names[0] || null,
+      greet: find(/wave|hello|greet/i),
+      tap: find(/wave|yes|agree|nod/i),
+      celebrate: find(/thumb|dance|jump|cheer|happy|yes|agree/i),
+      sorry: find(/^no$|shake|sad|cry/i),
+    };
+  }
+
+  // 뼈대가 있으면 (서 있기 동작을 입힌 뒤의) 뼈 위치로 크기를 잰다 - Mixamo
+  // 모형(Xbot/Michelle)은 뼈대에 0.01 배율·눕힌 회전이 걸려 있어서 메시 기준
+  // Box3가 실제로 그려지는 크기와 전혀 다르게 나온다.
+  function ym_3dBounds(scene) {
+    const T = window.THREE;
+    scene.updateMatrixWorld(true);
+    const box = new T.Box3();
+    let bones = 0;
+    scene.traverse((o) => { if (o.isBone) { box.expandByPoint(ym_worldP(o)); bones++; } });
+    const meshBox = new T.Box3().setFromObject(scene);
+    if (bones < 3) return meshBox;
+    // 메시 기준 크기가 뼈 기준과 비슷하면(로봇처럼 배율이 없는 모형) 그게 더
+    // 정확하다 - 큰 머리처럼 뼈 밖으로 튀어나온 부분까지 들어간다.
+    const h = box.max.y - box.min.y, mh = meshBox.max.y - meshBox.min.y;
+    if (h > 0 && mh / h > 0.5 && mh / h < 3) return meshBox;
+    box.max.y += h * 0.1;   // 머리 뼈는 정수리보다 낮으니 조금 올려 잡는다
+    return box;
+  }
+
+  function ym_3dFrame(scene, camera) {
+    const T = window.THREE;
+    const box = ym_3dBounds(scene);
+    const size = box.getSize(new T.Vector3()), center = box.getCenter(new T.Vector3());
+    // 키를 1로 맞추고 발을 바닥(y=0)에 세운다.
+    const s = 1 / Math.max(0.001, size.y);
+    scene.scale.setScalar(s);
+    scene.position.set(-center.x * s, -box.min.y * s, -center.z * s);
+    // 너비는 보지 않는다 - 사람 모형의 기본 자세가 팔을 벌린 T자라서 실제(서 있기)보다 넓게 잡힌다.
+    const halfH = 0.56;
+    camera.position.set(0, 0.55, halfH / Math.tan((camera.fov * Math.PI) / 360) + 0.3);
+    camera.lookAt(0, 0.5, 0);
+  }
+
+  function ym_setup3D(value, onFail) {
+    const canvas = document.getElementById('ym_rm-3d-canvas');
+    const avatarBtn = document.getElementById('ym_rm-avatar-btn');
+    const live2dCanvas = document.getElementById('ym_rm-live2d-canvas');
+    if (!canvas || !value || canvas.dataset.applied) return;
+    canvas.dataset.applied = '1';
+
+    const base = YM_3D_PRESETS[value] || null;
+    const url = base ? base.url : value;
+
+    ym_ensureThreeLibs()
+      .then(() => Promise.all([
+        ym_loadGltf(url),
+        base && base.borrow ? ym_loadGltf(base.borrow) : null,
+      ]))
+      .then(([gltf, donor]) => {
+        const T = window.THREE;
+        const model = gltf.scene;
+
+        const clips = {};
+        (gltf.animations || []).forEach((c) => { clips[c.name] = c; });
+        if (donor && T.SkeletonUtils) {
+          donor.animations.forEach((c) => {
+            if (clips[c.name]) return;
+            try { clips[c.name] = ym_retargetClip(donor.scene, model, c); } catch (e) { /* 옮기지 못한 동작은 건너뜀 */ }
+          });
+        }
+        const preset = base || ym_guessPreset(url, clips);
+        (preset.additive || []).forEach((n) => {
+          if (clips[n] && T.AnimationUtils.makeClipAdditive) T.AnimationUtils.makeClipAdditive(clips[n]);
+        });
+
+        let face = null;
+        model.traverse((o) => {
+          if (o.isMesh) {
+            o.frustumCulled = false;
+            if (o.morphTargetDictionary && !face) face = o;
+          }
+        });
+
+        const renderer = new T.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(YM_3D_W, YM_3D_H, false);
+        renderer.setClearColor(0x000000, 0);
+        renderer.outputEncoding = T.sRGBEncoding;
+
+        const scene = new T.Scene();
+        scene.add(new T.HemisphereLight(0xffffff, 0x444466, 1.1));
+        const sun = new T.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(1.5, 3, 2.5);
+        scene.add(sun);
+
+        const camera = new T.PerspectiveCamera(30, YM_3D_W / YM_3D_H, 0.01, 50);
+        scene.add(model);
+
+        const mixer = new T.AnimationMixer(model);
+        if (preset.idle && clips[preset.idle]) {
+          mixer.clipAction(clips[preset.idle]).play();
+          mixer.update(0);   // 서 있기 자세를 입힌 상태로 크기를 재려고
+        }
+        ym_3dFrame(model, camera);
+        model.rotation.y = -0.25;   // 살짝 비스듬히 - 채팅창 쪽(왼쪽)을 보게
+
+        ym3D = { scene, camera, renderer, mixer, clips, preset, face, mood: {}, emote: null };
+
+        const clock = new T.Clock();
+        const tick = () => {
+          if (!ym3D || !document.body.contains(canvas)) return;
+          window.requestAnimationFrame(tick);
+          const dt = Math.min(clock.getDelta(), 0.1);
+          mixer.update(dt);
+          if (ym3D.emote) {
+            ym3D.emote.left -= dt;
+            if (ym3D.emote.left <= 0) { ym3D.emote.act.fadeOut(0.3); ym3D.emote = null; ym3D.mood = {}; }
+          }
+          if (face) {   // 표정(morph: Sad/Surprised 등)을 부드럽게 따라가게
+            Object.keys(face.morphTargetDictionary).forEach((k) => {
+              const i = face.morphTargetDictionary[k];
+              const want = ym3D.mood[k] || 0;
+              face.morphTargetInfluences[i] += (want - face.morphTargetInfluences[i]) * Math.min(1, dt * 8);
+            });
+          }
+          renderer.render(scene, camera);
+        };
+        tick();
+
+        canvas.style.display = 'block';
+        if (avatarBtn) avatarBtn.style.display = 'none';
+        if (live2dCanvas) live2dCanvas.style.display = 'none';
+        ym_3dPlay('greet');
+      })
+      .catch((err) => {
+        console.error(YM_LOG_PREFIX, '3D 모형 로딩 실패, 기본 아바타로 대체:', err);
+        ym3D = null;
+        canvas.style.display = 'none';
+        if (avatarBtn) avatarBtn.style.display = 'flex';
+        if (typeof onFail === 'function') onFail();
+      });
+  }
+
+  // kind: greet | tap | celebrate | sorry - 프리셋에 있는 동작 중 하나를 한 번 한다.
+  function ym_3dPlay(kind) {
+    if (!ym3D) return;
+    const T = window.THREE;
+    const names = (ym3D.preset[kind] || []).filter((n) => ym3D.clips[n]);
+    if (!names.length) return;
+    const name = names[Math.floor(Math.random() * names.length)];
+    const clip = ym3D.clips[name];
+    if (ym3D.emote) ym3D.emote.act.fadeOut(0.2);
+    const act = ym3D.mixer.clipAction(clip);
+    const loops = /dance/i.test(name);
+    act.reset();
+    act.setLoop(loops ? T.LoopRepeat : T.LoopOnce, 1);
+    act.clampWhenFinished = true;
+    act.setEffectiveWeight(1);
+    act.fadeIn(0.25);
+    act.play();
+    ym3D.emote = { act: act, left: loops ? 3.5 : clip.duration };
+    ym3D.mood = kind === 'sorry' ? { Sad: 1 } : kind === 'tap' || kind === 'greet' ? { Surprised: 0.6 } : {};
+  }
+
   function ym_fetchReply(userText) {
     const params = new URLSearchParams({
       message: userText || '',
@@ -508,7 +803,12 @@
         if (data.character_image_url) {
           ym_setAvatarImage(data.character_image_url);
         }
-        if (data.character_live2d_url) {
+        if (data.character_model3d) {
+          // 3D 모형이 Live2D보다 우선 - 3D가 실패하면 Live2D(설정돼 있다면)로 물러난다.
+          ym_setup3D(data.character_model3d, () => {
+            if (data.character_live2d_url) ym_setupLive2D(data.character_live2d_url);
+          });
+        } else if (data.character_live2d_url) {
           ym_setupLive2D(data.character_live2d_url);
         }
 
