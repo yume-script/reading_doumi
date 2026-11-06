@@ -343,8 +343,9 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
     # (코어 규칙상 "내 설정 > 홈 화면 플러그인 배치 모드"를 켜고 "+ 위젯 추가"로
     # 직접 골라야 홈에 나타난다.)
     home_widget = {
+        # subtitle은 두지 않는다 - 코어가 제목줄 아래 별도 줄로 그려서, 평소엔
+        # 제목줄만 보이게 접어두는 이 위젯(dashboard.js)과 맞지 않는다.
         "title": "독서도우미",
-        "subtitle": "우측 하단 마스코트와 대화",
         "icon": "fa-solid fa-comment-dots",
         "order": 95,
         "limit": 1,
