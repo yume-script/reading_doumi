@@ -62,6 +62,13 @@ LLM과 대화하듯 내 서재의 책을 추천받거나, 책 목록/저자/서�
   설정하면 LIVE2D_MODEL_URL/CHARACTER_IMAGE_URL보다 우선 적용되고, 답변
   감정(celebrate/sorry)에 맞춰 엄지척·춤·고개 젓기 같은 동작을 한다.
 
+- (신규) home_widget을 선언해서 홈 화면 위젯으로도 쓸 수 있다. 위젯 카드의
+  dashboard.js가 탭과 같은 script.js를 /ui 번들에서 받아 실행하므로, 홈에
+  위젯을 추가해 두면 탭을 열지 않아도 마스코트가 뜨고 다른 메뉴에서도 계속
+  떠 있다. 홈 위젯이 그려지려면 get_dashboard_data가 성공을 돌려줘야 해서,
+  메시지 없는 호출(인사말)은 LLM_API_KEY가 없어도 안내 문구와 함께 성공으로
+  응답한다.
+
 - (신규) 책과는 무관하지만 마스코트 잡담용으로 /날씨 <지역>과 /주식 <종목명
   또는 코드>를 추가했다. 둘 다 DB 접근 없이 외부 사이트만 조회하는
   "/명령어" 방식이고, 별도 API 키가 필요 없다(둘 다 네이버의 공개 페이지/
@@ -329,6 +336,23 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
         },
     ]
 
+    # 홈 화면 위젯 - 카드 자체는 작은 안내/바로가기지만, 카드의 dashboard.js가
+    # 마스코트(script.js)를 document.body에 띄워서 홈에서 다른 메뉴로 옮겨가도
+    # 계속 떠 있게 한다. 즉 사용자가 이 위젯을 홈에 한 번 추가해 두면, 매번
+    # 독서도우미 탭을 열거나 자동 오픈 유저스크립트를 쓰지 않아도 된다.
+    # (코어 규칙상 "내 설정 > 홈 화면 플러그인 배치 모드"를 켜고 "+ 위젯 추가"로
+    # 직접 골라야 홈에 나타난다.)
+    home_widget = {
+        "title": "독서도우미",
+        "subtitle": "우측 하단 마스코트와 대화",
+        "icon": "fa-solid fa-comment-dots",
+        "order": 95,
+        "limit": 1,
+        "sessions": "all",
+        "layout": "grid",
+        "size": 1,
+    }
+
     category_tab = {
         "title": "독서도우미",
         "icon": "fa-solid fa-comment-dots",
@@ -346,6 +370,7 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
             "reading_doumi.py", "__init__.py", "VERSION",
             "index.html", "style.css", "script.js",
             "README.md", "requirements.txt",
+            "dashboard.html", "dashboard.css", "dashboard.js",
         ],
         "version_file": "VERSION",
         "version_key": "plugin version",
@@ -1188,12 +1213,6 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
         character_live2d_url = str(cfg.get("LIVE2D_MODEL_URL") or "").strip()
         character_model3d = self._normalize_model3d(cfg.get("CHARACTER_3D_MODEL"))
 
-        if not api_key:
-            return {
-                "success": False,
-                "error": "LLM_API_KEY가 설정되지 않았습니다. 환경설정 > 플러그인에서 입력해주세요.",
-            }
-
         def reply_payload(reply_text):
             return self._reply_payload(
                 character_name, character_image_url, character_live2d_url, reply_text, character_model3d
@@ -1203,7 +1222,19 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
         stored_history = cfg.get("_CHAT_HISTORY")
         stored_history = stored_history if isinstance(stored_history, list) else []
 
+        # 메시지 없는 호출 = 마스코트 첫 오픈(인사말/기록 복원) 또는 홈 위젯 로딩.
+        # API 키가 없어도 성공으로 돌려줘야 홈 위젯(dashboard.js)이 실행되고
+        # 마스코트가 뜬다 - 키가 없다는 안내는 인사말 자리에서 대신 한다.
+        # items는 홈 위젯 카드(dashboard.js)가 캐릭터 이름을 그리는 데 쓴다.
+        widget_items = [{"widget_type": "reading_doumi", "character_name": character_name}]
         if not args["message"]:
+            if not api_key:
+                payload = reply_payload(
+                    f"안녕! 나는 {character_name}야. 아직 LLM_API_KEY가 설정되지 않아서 대화를 할 수 없어요. "
+                    "환경설정 > 플러그인 > 독서도우미에서 입력해주세요."
+                )
+                payload["items"] = widget_items
+                return payload
             if stored_history:
                 return {
                     "success": True,
@@ -1212,12 +1243,21 @@ class YM_ReadingDoumiMetadataProvider(BaseMetadataProvider):
                     "character_image_url": character_image_url,
                     "character_live2d_url": character_live2d_url,
                     "character_model3d": character_model3d,
+                    "items": widget_items,
                 }
-            return reply_payload(
+            payload = reply_payload(
                 f"안녕! 나는 {character_name}야. 책 추천은 물론, 서재에 있는 책 목록·저자·줄거리도 찾아줄 수 있어.\n"
                 "'/완독 책 제목', '/읽는중 책 제목', '/랜덤', '/통계', '/외부검색 책 제목', '/퀴즈', "
                 "'/날씨 지역', '/주식 종목명', '/환율 통화', '/로또', '/코인 이름', '/명언', '/운세' 같은 명령도 써봐!"
             )
+            payload["items"] = widget_items
+            return payload
+
+        if not api_key:
+            return {
+                "success": False,
+                "error": "LLM_API_KEY가 설정되지 않았습니다. 환경설정 > 플러그인에서 입력해주세요.",
+            }
 
         message = args["message"]
         cols = self._inspect_book_columns(db_type)
